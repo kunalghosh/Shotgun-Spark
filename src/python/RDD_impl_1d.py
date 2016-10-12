@@ -27,10 +27,6 @@ def F(x,A,y,lamda):
     """
     return 0.5 * np.square(np.linalg.norm(np.dot(A,x) - y)) + lamda*np.linalg.norm(x,1)
 
-def transpose(matrix):
-    """Transposes a matrix represented as a spark dataframe"""
-
-
 if __name__ == "__main__":
     data = sio.loadmat("../../data/Mug32_singlepixcam.mat",mat_dtype=True)
     y = data['y']
