@@ -1,7 +1,7 @@
 % Shotgun : Parallel SCD
 clear all;
 format long;
-load('Mug32_singlepixcam.mat'); lambda=0.05;
+load('../../data/Mug32_singlepixcam.mat'); lambda=0.05;
 [N,d] = size(A);
 
 x_org = zeros(d,1);
