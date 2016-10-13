@@ -1,4 +1,5 @@
 from __future__ import print_function
+from __future__ import division
 
 import numpy as np
 import scipy.io as sio
@@ -26,6 +27,31 @@ def F(x,A,y,lamda):
     LASSO function
     """
     return 0.5 * np.square(np.linalg.norm(np.dot(A,x) - y)) + lamda*np.linalg.norm(x,1)
+
+def maxEigenValue(AtA, max_iters=100, eps=10**-2 ):
+    """
+    Given a symmetric (column major) matrix, returns its
+    maximum eigen value using power iteration method.
+
+    params: 
+    """
+    d = AtA.count() # the number of dimensions
+    max_eig = None
+    v = np.random.random(d)
+    for _ in xrange(max_iters):
+        # print(v)
+        v_new = AtA.map(lambda (AtAi): np.dot(AtAi,v)).collect()
+        norm = np.linalg.norm(v_new,2)
+        v_new /= norm
+        # print(v_new)
+        max_eig = norm
+        l2_diff = np.linalg.norm(v_new-v,2)
+        # print("Debug maxEig : {}, l2_diff : {}".format(max_eig,l2_diff))
+        if l2_diff < eps:
+            break
+        v = v_new
+
+    return max_eig
 
 if __name__ == "__main__":
     data = sio.loadmat("../../data/Mug32_singlepixcam.mat",mat_dtype=True)
@@ -63,6 +89,13 @@ if __name__ == "__main__":
                             np.dot(np.transpose(A[:,cid]),A),
                             np.dot(np.transpose(y),A[:,cid]))).\
             persist() #here cid is the column index.
+    
+    AtA = data.map(lambda (cid, AtAi, ytAi): AtAi)
+    max_eig = maxEigenValue(AtA)
+    print("Maximum Eigen value : ",max_eig)
+
+    P_opt = int(d/max_eig) # maxeig is the spectral radius (rho) in the paper. 
+    print("Optimal number of parallel updates : ",P_opt)
 
     # NOTE: When computing AtA if A doesn't fit into memory we:
     # 1. Compute individual elements of the AtA matrix.
@@ -74,9 +107,14 @@ if __name__ == "__main__":
     lamda = sc.broadcast(0.05) # lamda ("lambda") for Mug32_singlepixcam = 0.05
 
     maxiters = 1000
+    print(data.count())
 
     for i in range(10):
-        P_vals=[1,2,4,6,8,10,20,30,40,50,60,70,80,90,100,110]
+        # P_vals=[1,2,4,6,8,10,20,30,40,50,60,70,80,90,100,110]
+        P_vals=[P_opt]
+        # NOTE : YAY !! if P_vals = P_opt/2 (400 iters) then we should take twice the number
+        # of iterations as P = P_opt (200 iters). Exactly that happens :D and here P_opt = 158 (wOOt !)
+        # and runs fine on my laptop :P
         for P in P_vals:
             x = np.zeros(d)
             for iter in xrange(maxiters):
@@ -91,6 +129,7 @@ if __name__ == "__main__":
                 x[idxs] += np.max(np.array([-1*x[idxs], -1*updates[:,1]/beta.value]),axis=0)
 
                 if iter % 100 == 0:
+                    print(x[x!=0])
                     # # Following line would change if A doesn't fit in memory
                     print("Iter {} NormVal {}".format(iter, F(np.reshape(x,(d,1)), A, y, lamda.value))) 
     

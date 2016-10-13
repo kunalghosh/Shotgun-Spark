@@ -14,22 +14,18 @@ def normc(x):
     """
     return x / np.sqrt(np.square(x).sum(axis=0))
 
-def deltaF(x, AtA, ytA, lamda):
-    """
-    1st Derivative of LASSO
-    """
-    retVal = (np.dot(x.transpose(),AtA) - ytA) + lamda;
-    return retVal
+# def deltaF(x, AtA, ytA, lamda):
+#     """
+#     1st Derivative of LASSO
+#     """
+#     retVal = (np.dot(x.transpose(),AtA) - ytA) + lamda;
+#     return retVal
 
 def F(x,A,y,lamda):
     """
     LASSO function
     """
     return 0.5 * np.square(np.linalg.norm(np.dot(A,x) - y)) + lamda*np.linalg.norm(x,1)
-
-def transpose(matrix):
-    """Transposes a matrix represented as a spark dataframe"""
-
 
 if __name__ == "__main__":
     data = sio.loadmat("../../data/Mug32_singlepixcam.mat",mat_dtype=True)
@@ -77,10 +73,10 @@ if __name__ == "__main__":
     ## aTa = sc.parallelize(xrange(d)).map(lambda cid: np.dot(np.transpose(A[:,cid]),A))
 
     # Parallelizing column wise
-    data = sc.parallelize(xrange(d)).\
+    data = sc.parallelize(xrange(2*d)).\
             map(lambda cid: (cid,
-                            np.dot(np.transpose(A[:,cid]),A),
-                            np.dot(np.transpose(y),A[:,cid]))).\
+                            np.dot(np.transpose(A[:,cid % d]),A),
+                            np.dot(np.transpose(y),A[:,cid % d]))).\
             persist() #here cid is the column index.
     # NOTE: When computing AtA if A doesn't fit into memory we:
     # 1. Compute individual elements of the AtA matrix.
@@ -108,18 +104,25 @@ if __name__ == "__main__":
             for iter in xrange(maxiters):
                 randIdxs = np.random.permutation(2*d)
                 randPidxs = randIdxs[0:P]
-                # x = sc.broadcast(x)
+
                 # Get the data corresponding to the P indexes.
+                # NOTE: Problem !! cid(s) in data_sub are always
+                #       less than d. So the map with deltaF will
+                #       not work. !
                 data_sub = data.filter(lambda (cid, AtAi, ytAi): cid in randPidxs or cid+d in randPidxs)
                 # updates = data_sub.map(lambda (cid, AtAi, ytAi): (cid, np.dot(x.transpose(), AtAi) - ytAi + lamda.value)).collect()
                 updates = np.array(data_sub.map(deltaF).collect())
                 idxs = np.array(updates[:,0],int)
-                x[idxs] += np.maximum(-1*x[idxs], -1*updates[:,1]/beta.value)
+                # x[idxs] += np.maximum(-1*x[idxs], -1*updates[:,1]/beta.value)
+                x[idxs] += np.max(np.array([-1*x[idxs], -1*updates[:,1]/beta.value]),axis=0)
 
                 if iter % 100 == 0:
+                    # print(idxs)
+                    # print(x[x!=0])
                     x_1d = x[d:] - x[:d]
-                    # Following line would change if A doesn't fit in memory
-                    print("Iter {} NormVal {}".format(iter, F(x_1d, A, y, lamda.value))) 
+                    # print(x_1d[x_1d!=0])
+                    # # Following line would change if A doesn't fit in memory
+                    print("Iter {} NormVal {}".format(iter, F(np.reshape(x_1d,(d,1)), A, y, lamda.value))) 
     # # Normalizing A
     # data = data.map(lambda (cid,a,y):\
     #         (cid,a/np.sqrt(np.sum(np.square(a))),y))
