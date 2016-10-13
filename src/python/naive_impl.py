@@ -49,7 +49,7 @@ if __name__ == "__main__":
 
     # Initialization
     iter = 0
-    P = 20
+    #P = 20
     # rho = max(eigs(AtA)) # TODO: Implement eigs
     # P_opt = d/rho; # TODO: implement this once we have the rho
 
@@ -61,7 +61,7 @@ if __name__ == "__main__":
         iterations=[]
         P_Val=[1,2,4,6,8,10,20,30,40,50,60,70,80,90,100,110];
         print("Nonzero x {}".format(np.nonzero(x)))
-        for p in P_Val:
+        for P in P_Val:
             normVal = []
             iter = 0
             condition = True
@@ -87,7 +87,7 @@ if __name__ == "__main__":
                 x[randPidxs] = x_subset
 
                 # normVal.append(F(x,A,y,lamda) - F(x_opt,A,y,lamda))
-                condition = iter < 1000
+                condition = iter < 10000
                 # normVal.append( (F(x) - F(x_opt2.beta)) /F(x_opt2.beta))
                 # TODO: How to calculate x_opt2.beta in this case ?
 
@@ -95,7 +95,7 @@ if __name__ == "__main__":
                     # print("Iterations {} NormVal {} x-non_zero {}".format(iter, F(x,A,y,lamda), np.nonzero(x.transpose())))
                     print("Iterations {} NormVal {}".format(iter, F(x,A,y,lamda)))
 
-            iterations.append({p:(iter,x)})
-            print("i {} p {} iter {}".format(i,p,iter))
+            iterations.append({P:(iter,x)})
+            print("i {} p {} iter {}".format(i,P,iter))
         x_opt_collection.append({i : iterations})
     pprint.pprint(x_opt_collection)
