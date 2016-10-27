@@ -37,7 +37,8 @@ if __name__ == "__main__":
     N,d = A.shape
     print(N)
 
-    sc = SparkContext(appName='pySparkShotgun', master='local')
+    # sc = SparkContext(appName='pySparkShotgun', master='local')
+    sc = SparkContext(appName='pySparkShotgun')
 
     ## Parallelizing rowise
     # A = sc.parallelize(xrange(N)).map(lambda i: (A[i,:],y[i])).persist()
