@@ -13,3 +13,5 @@ The [report](https://github.com/kunalghosh/Shotgun-Spark/blob/master/report/Repo
 ## For the Matlab Implementation
 Apart from a working installation of Matlab, there is no other dependency.
   
+by:
+Kunal Ghosh and Jussi Ojala
