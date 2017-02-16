@@ -1,0 +1,420 @@
+% This is a model template for the solutions in computational science. You can find a very useful documentation for LaTeX in Finnish at ftp://ftp.funet.fi/pub/TeX/CTAN/info/lshort/finnish/ or in English at ftp://ftp.funet.fi/pub/TeX/CTAN/info/lshort/english/. The section List of mathematical symbols in Chapter 3 is especially useful for the typesetting of mathematical formulas.
+
+% Compile the document to PDF by command 'pdflatex model.tex' in the terminal. The command must be run twice for the references in the text to be correct.
+
+\documentclass[a4paper,11pt]{article}
+
+%\documentclass[a4paper,11pt]{scrartcl}
+\usepackage[utf8]{inputenc}
+% This includes letters such as � and �
+\usepackage[T1]{fontenc}
+% Use here 'Finnish' for Finnish hyphenation. You may have to compile the code twice after the change. 
+\usepackage[english]{babel}
+\usepackage{graphicx}
+% Some math stuff
+\usepackage{amsmath,amsfonts,amssymb,amsbsy,commath,booktabs}  
+% This is just to include the urls
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,      
+    urlcolor=cyan,
+}
+\usepackage[all]{hypcap}
+\usepackage[margin=2cm]{geometry}
+
+\usepackage[usenames, dvipsnames]{xcolor}
+
+\usepackage{minted}
+\definecolor{mygray}{gray}{0.8}
+
+% \usemintedstyle{monokai}
+% \usemintedstyle{tango}
+
+
+
+% \usepackage{tcolorbox}
+% \usepackage{etoolbox}
+% \BeforeBeginEnvironment{minted}{\begin{tcolorbox}}%
+% \AfterEndEnvironment{minted}{\end{tcolorbox}}%
+
+\setlength{\parindent}{0mm}
+\setlength{\parskip}{1.0\baselineskip}
+
+\usepackage{listings,caption}
+\usepackage{color}
+
+\definecolor{dkgreen}{rgb}{0,0.6,0}
+\definecolor{gray}{rgb}{0.5,0.5,0.5}
+\definecolor{mauve}{rgb}{0.58,0,0.82}
+
+\lstset{frame=tb,
+	language=Python,
+	aboveskip=3mm,
+	belowskip=3mm,
+	showstringspaces=false,
+	columns=flexible,
+	basicstyle={\small\ttfamily},
+	numbers=left,
+	numberstyle=\tiny\color{gray},
+    numbersep=5pt,
+    rulecolor=\color{black},
+	keywordstyle=\color{blue},
+	commentstyle=\color{dkgreen},
+	stringstyle=\color{mauve},
+    breaklines=true,
+	breakatwhitespace=true,
+    backgroundcolor=\color{mygray},
+	tabsize=4
+}
+\makeatletter
+\AtBeginDocument{\let\c@listing\c@lstlisting}
+\makeatother
+
+\begin{document}
+
+\title{Convex Optimization for Big Data T-61.6020 \\ \vspace{8 mm}
+	Guidebook to use Spark on Triton \\
+	\large{  Example implementation of \textit{Shotgun} algorithm }}
+
+%\subtitle{ Example implementation of \textit{Shotgun} algorithm} % Replace the exercise round number
+    \date{}
+\author{Kunal Ghosh and Jussi Ojala } % Replace with your name and student number
+\maketitle
+\tableofcontents
+
+\newpage
+
+\section{Introduction}\label{prob1}
+
+The buzzword "big data" is often defined with three V's, Volume, Velocity and Variability. In the context of this report we concentrate problems related to the size of the data (Volume). This report guides you through elementary steps to deal with such a problems using Aalto Universities  computing facilities. The essence of the report is to help utilise Aalto Triton heterogeneous computing system for distributed calculations with Spark. Throughout the report we use parallel co-ordinate decent (convex) optimisation algorithm "Shotgun" as an guiding example. 
+
+The report is organised so that we first briefly introduce the general use case scenarios when it is useful to change from the single computer calculations to the distributed calculations, which can be allowed by using some cluster computing system. Then we have general introduction to the Aalto cluster computing environment and it's queueing system, called Triton. After getting familiar with Triton we set the Triton system for distributed calculations with Apache (Py)Spark implementations. We go this setting through step by step. At the end we are ready to go to the details of the $Shotgun$ Spark implementation and run this distributed algorithm in Triton system.        
+
+The report contains the user guide to set up the Spark on Triton environment. However the aim of the project was to first enable the distributed optimisation of the example algorithm, called $Shotgun$ [Bradley]. We selected simple L1 (Lasso) regularised linear regression model for our study case. This is another of the example cases shown in the original paper introducing the "Shotgun" algorithm. As shown in the paper, this convex optimisation problem can be parallelised, but the algorithm is intended for multicore  parallelism (i.e. no time delay between parallelised calculations). Our multicore matlab implementation can be found in  Appendix \ref{shotgun-mat}. In this paper we will use the algorithm in distributed calculations i.e. allowed delays between processes. The synchronization details are internal to \texttt{Spark}, however, it maintains the logical order in which the operations (on the data) have been implemented. The Spark implementaion can be found in Appendix \ref{shotgun-spark}. 
+
+In the change from multicore matlab implementation to the PySpark implementation, the first step was to implement algorithm in Python and then do the conversion to PySpark to enable distributed calculations. The python implementation is included in Appendix \ref{shotgun-py}. The second step is the essence of this report and that is to show how to set up this distributed calculations (Spark implementation ) to the queueing system (SLURM). The report includes detailed instructions to set up distributed Spark implementation to that environment. For short example calculation, we selected the same data from the original paper [Bradley] called \textit{Mug32singlepixcam}. The data size is not "big" however it is used for the testing purposes. This enables us to see that implemented algorithm gives similar results as produced in original paper. 
+
+\section{Use case - When do you need this setup}
+
+In our case it is assumed that the data size is the origin of the problems. The limitation of single computer comes either due to storing capabilities or computing time (when either the algorithm is complex or the dimension of the data is very high). In this case the size of the data and the number of cores in available computer defines when it is useful to change the setup from the one computer to several computer. As long the memory in the computer is not the bottleneck 
+and the cores in the computer provide enough parallelism that the 
+calculation time is reasonable there is no reason to change the setup.
+ 
+However when the time or memory start to be bottleneck that is usually 
+the time to change. In our example this means changing from Matlab multicore programming to PySpark implementation of distributed computing. It would have been fine to do the original implementation with (Py)Spark to get the benefits of the multi-core parallelism, however often the initial implementation and debugging of the code is easyer with some other programming language. This was the reason why we first version was coded with matlab (there were no intention to distributed calculations by then). The time for Spark is often when the original programming environment meet it's limits in parallelism. 
+
+Moreover the cluster's like Triton are used only when the dataset you want to work with doesn't fit into the memory of a single computer or the algorithm needs more parallelism than can be found in one computer to work in sufficient time.
+
+However, its fine (and advisable) to use a smaller dataset when testing 
+your (Py)Spark implementation and when testing the cluster setup.
+
+\subsection{How big is your data ?}
+As we explained earlier the limits of data size to change between single computer to cluster based approach depends on the available resources. Aalto university IT provides quite large hosts like \texttt{brute.aalto.fi} 
+and \texttt{force.aalto.fi} each with 256GB of RAM and 32 Cores. It is 
+possible to run \texttt{MATLAB} or (Py)Spark on these hosts. However the 
+resources of these computers are shared by all Aalto students and staff. 
+If your code would use significant portions of the resources of the above 
+two machines, for a long period of time, you should consider using Triton 
+instead.
+Before starting to use Triton environment, read the Triton Usage Policy !\footnote{\label{note1}\url{https://wiki.aalto.fi/display/Triton/Triton+usage+policy}} and test your implementation with smaller data.
+
+\subsubsection{Data for example implementation}
+
+For testing purposes we used the data \texttt{Mug32singlepixcam} which is small data 410 rows with 1024 features. The shotgun is designed for this kind of data that have more features than samples. This also allowed us to compare the results to one test result from the original paper. 
+
+We have briefly discussed how to handle large datasets (which do not fit into the memory of a single computer) \hyperref[bigdata]{here}.
+\section{Triton - A brief Introduction}
+
+Triton is a collection of heterogeneous computer nodes (servers). By 
+heterogeneous, we mean, some of the servers have large RAM, some have lots of CPU cores, some servers have GPU (Graphics Processing Unit) cards connected to 
+them, etc.So, one can run a wide variety of different types of computations on the Triton cluster. 
+
+To get started with Triton CSC department has collected parctical information starting from, how to log-in to Triton to several details in  \textit{Triton quickstart guide}\footnote{\url{http://science-it.aalto.fi/wp-content/uploads/sites/2/2016/05/SCiP2016\_summer.Triton\_intro.pdf}}. When the initial step is done helping guidance can be found from Aalto-IT triton wiki\footnote{\url{https://wiki.aalto.fi/display/Triton/}}. 
+
+In the following subsections we go through essential issues to understand how to start use the Triton cluster. First we connect to the Triton Loging host and clarify few essential terms issues in the Triton queueing system. When the main interface is clear we use simple example to show how to describe and send a  \texttt{Job} to Triton. We also clarify how the \texttt{Job} is proceeding inside Triton and where you can find the output. \\
+But before start to implement, read the Triton Usage Policy !\textsuperscript{\ref{note1}}%{https://wiki.aalto.fi/display/Triton/Triton+usage+policy}
+
+\subsection{Interacting with Triton}
+In this section we briefly introduce high-level structure of typical queueing system. The aim is to go through the steps to interact with Triton queueing system and go through most important logical components of Triton. Figure \ref{fig:1} shows the tree main component: Loging host, task manager and computer resources. In following we clarify interaction with them and remind how those components see data and needed software. 
+
+\begin{itemize}
+    \item \textbf{Connect Triton:} First  \texttt{ssh} into the Triton \textbf{Login Host} from a laptop or a desktop computer connected to the Aalto network.
+    \begin{itemize}
+    \item Open a terminal program and enter \texttt{\$ssh username@triton.aalto.fi} 
+	\end{itemize}
+    \item \textbf{Specify Computing needs:} After connecting the Triton \textbf{Login Host} you need to specify computing resource needs to Triton task manager, called \texttt{SLURM}. \texttt{SLURM} is an open-source task-management system employed in many similar clusters like Triton.
+    \begin{itemize}
+        \item     \textbf{NOTE:} You must not run any CPU / Memory intensive applications on the login Host. It is typically only used for submitting jobs to SLURM and monitoring the submitted jobs. These job submission and monitoring is done using special slurm specific commands.
+    \end{itemize}
+    \item \textbf{Use allocated computers:} Triton resources includes a cluster of Heterogenous computers. These are Individual computers which are all connected to triton. You can access these only after you have submitted a job to SLURM, in which you have specified what sort of computers you need and for how long, and SLURM has allotted these computers to your job. 
+    \begin{itemize}
+    	\item      Once your allotted time is over, you can no longer access computers you were allotted earlier, unless SLURM allotts them to you again in a following new job request.
+    \end{itemize}
+
+\end{itemize}
+
+\begin{figure}[ht]
+    \capstart
+    \centering
+    \fbox{\includegraphics[width=0.7\textwidth]{1.png}}
+    \caption{A block diagram depicting the Triton  main logical components that user interacts.}
+    \label{fig:1}
+\end{figure}
+
+After logging process to Triton is clear it is worth to clarify how the data and needed software are handled in Triton.  
+
+\begin{itemize}
+    \item File System, how the data is handled
+        \begin{itemize}
+            \item Each host i.e. the \texttt{Triton login host} and the hosts that SLURM allots to your job have a fast local storage mounted as the \texttt{tmp} folder in the root directory. Consider this as a fast harddrive or SSD connected locally to that computer. Use this when you want to store some temporary files during computations.
+            \item Each host also has an environment variable \texttt{\$WRKDIR} which is a folder mounted on a network file system, and is available at the same location in all hosts. You are recommended to \texttt{cd} into this folder when you log into Triton and treat that as your workspace. 
+            \begin{itemize}
+            \item \textbf{NOTE} that since its a network folder, it is synchronized between all the hosts and hence it is slow to access.
+	        \end{itemize}
+        \end{itemize}
+    \item Software : You might want to use various software packages (e.g.
+        a compiler) when using Triton. You can use the \texttt{module} command to access various pre-installed packages. Some commonly used commands:
+        \begin{itemize}
+            \item \texttt{module list} : To list all installed software packages.
+            \item \texttt{module spider <name>} : To search for a software package. e.g. \texttt{module spider numpy} 
+            \item \texttt{module load <module name>} : Load a module after which you can start using the softwares bundled in the module.
+        \end{itemize}
+\end{itemize}
+\subsection{Computing with Triton}
+
+When you want to run a computation on Triton you do it by submitting a \textit{Job} to \texttt{SLURM}. However you can also use Triton interactively by requesting SLURM an interactive session. These interactive sessions are mainly intended for debugging your \textit{Job} scripts.
+
+A \textit{Job} script is a (Unix/Linux) shell script. Below a very simple example script named \texttt{request.slrm}: 
+
+% \inputminted[baselinestretch=1, fontsize=\small, breaklines=true, mathescape, bgcolor=mygray]{shell}{../../triton/request.slrm}
+\begin{listing}
+    \begin{minted}[baselinestretch=1, fontsize=\small, breaklines=true, bgcolor=mygray]{shell}
+#!/bin/sh
+#SBATCH --time=00:05:00
+#SBATCH -N 3
+#SBATCH --ntasks-per-cpu=10
+
+srun /bin/echo hello world
+    \end{minted}
+    \caption{\texttt{request.slrm}}
+\end{listing}
+
+
+A few things to note:
+\begin{itemize}
+    \item We choose to give the script a \texttt{.slrm} extension just to distinguish it from other shell scripts. But it could also be \texttt{.sh} for example.
+    \item As in all shell scripts the first line is in the comment for unix shell and specify the executable shell interpreter(sh). For more information read the wikipedia article on \texttt{UNIX Shebang}\footnote{\url{https://en.wikipedia.org/wiki/Shebang\_(Unix)}}
+    \item The lines in the script beginning with a \verb|#|\texttt{SBATCH} specify our \textit{Job} configuration and have a special meaning for \texttt{SLURM} when we submit the script to it. For example in the script above:
+        \begin{itemize}
+            \item \verb|#| at the beginning of the SBATCH indicates that its a comment for the unix shell. However, it has a special meaning for \texttt{SLURM}.
+            \item \verb|#|\texttt{SBATCH --time=00:05:00}\\ Indicates (to \texttt{SLURM}) that we want to run the job for 5 minutes. Once \texttt{SLURM} allocates some resources to this \textit{Job} it will revoke the resources and kill the job after 5 minutes.
+            \item \verb|#|\texttt{SBATCH -N 3} \\Indicates that this \textit{Job} must be run on 3 hosts.
+            \item \verb|#|\texttt{SBATCH --mem-per-cpu=10}\\ Indicates that we want 10 MB memory per core.
+     \end{itemize}   
+    \item \textbf{\texttt{SLURM} will put your job on hold} until all the resources you have requested for are available before it will launch your script. So be judicious with the amount of resources you request !
+    \item  \texttt{srun <command>} indicates the command that slurm will run as separate process.
+    \begin{itemize}
+    	\item Typically, \texttt{<command>} is another shell script which is executed on each of the hosts assigned to your Job.
+    	\item Intuitively, it is like logging into all of the hosts and executing the \texttt{<command>} on each of the hosts.So, you need to take care of how you want to share data between the processes running on all the hosts.  
+	    \item A typical script invoked using \texttt{srun} could logically have the following parts:
+            \begin{enumerate}
+                \item Set up your processing environment (e.g. using \texttt{module load <name>} which loads the necessary software on each host).
+                \item Download the necessary datasets. 
+                \item Run a (python) script which processes the downloaded data.
+                \item Clean-up tasks after the script is done executing. (e.g. delete the downloaded dataset or temporary files created during execution). 
+            \end{enumerate}
+    \end{itemize}  	
+\end{itemize}
+
+The process to submit the \textit{Job} to the SLURM and it's execution is described in Figure \ref{fig:2}. From Triton Loging host the \textit{Job} script is submitted to SLURM with the \texttt{sbatch <script\_name.slurm>} command. This command returns a \texttt{JOB ID} specific to your submission. The job itself is now in the SLURM queue. You can query the current status of your job using the \texttt{slurm q} command (more information at\footnote{\url{https://wiki.aalto.fi/display/Triton/Slurm+status+commands}}). Once the job is completed you will find a output file in your current working directory. The file has \texttt{JOB ID} as the filename and a \texttt{.out} ending extension. This will contain all the output that your job writes to \texttt{STDOUT}\footnote{\url{See https://en.wikipedia.org/wiki/Standard\_streams Standard output}}.\\
+Excellent place to look more information about these is from the Triton User Guide\footnote{\url{https://wiki.aalto.fi/display/Triton/Triton+User+Guide}} and  Aalto Triton FAQ\footnote{\url{https://wiki.aalto.fi/display/Triton/Triton+FAQ}} maintained by Aalto Science-IT.
+\begin{figure}[ht]
+    \centering
+    \fbox{ \includegraphics[width=0.7\textwidth]{2.png} }
+    \caption{Illustration of the scenario where a user requests SLURM for 5 computers with large memory (RAM) and 2 computers with Fast CPUs. There are specific ways to make requests like these, see details from the User Guide. However, in this example case the request is kept pending by SLURM since there are no free resources which fully satisfy the user's request. \textbf{NOTE:} the command \texttt{sbatch -q debug} (which would be introduced in the next few steps) requests hosts from the \textit{debug} queue, which has a restriction that jobs in this queue cannot be requested for more than 10 minutes, i.e. its for debugging only.}
+    \label{fig:2}
+\end{figure}
+
+\section{Setting up \texttt{Apache Spark} on Triton}
+
+\texttt{Apache Spark (Spark)} has three main components: The master node, the slave node(s) and the data stores. The slave nodes do the distributed calculations and the master node is responsible for "control and coordination" of a spark setup and doesn't itself do any computation. The data store contain the spark data wich can be saved with different types of API's such as sql, data set,  data frames or RDD's. 
+
+We will go through the setting up the Spark to Triton in step by step. First we connect to the Triton and download the Spark somewhere to be available by all the hosts. This is one example how to do this, later when the spark is available in Triton you can use the module command like in any software. However since there are quite frequently available new versions of Spark it is useful to understand this approach as well. 
+
+The second phase is to launch the Spark master in the Loging host. When launching the master we allocate the ports to master interface and the master web browsing interface. To be able to follow further Spark actions the WebUI  should be available in your computer, this you can do via "ssh tunneling". When this is done you can further proceed by sending the SLURM request to get the hosts for the Spark slaves. When sending the request, remember that Triton release your resources as soon as the scrip has been executed or the allocated time is expired. We put our scrip to sleep for a while to keep our slave host alive as long as we allocated time to the Triton hosts.  
+
+In the end we show how to run the famous word count example in Triton environment, where the python code for that comes with (Py)Spark package. We use the Spark streaming interface to read the data and feed the data to the python script. Now depending which kind of data you are going to analyse with your Spark implementation it can be either downloaded or read from the file on other server or other data storage system like hadoop. If the data is "small enough" like in our example the network drive is visible to all the host and spark takes automatically care participation of the data to all the slaves. In this simple "word count"  example we just use the tiny data in the network drive.
+
+Although, there might be other better ways to setup \texttt{Spark} on Triton we found this approach as easiest. 
+
+\begin{enumerate}
+	\item Ensure that you are logged into the Triton login host. Now create a folder under the network drive \texttt{\$WRKDIR } e.g. \texttt{\$WRKDIR/shotgun-spark}.
+	\item Begin by first downloading \texttt{Spark} from the apache.org website and then extract the archived file inside the folder you created e.g. \texttt{\$WRKDIR/shotgun-spark/}. In our case we now have the following directory structure \texttt{\$WRKDIR/shotgun-spark/spark-2.0.1-bin-hadoop2.7}
+	\begin{itemize}
+		\item Recall that all the files inside \texttt{\$WRKDIR} are synchronized between all the Triton computers. So, our newly created folder will be available on all Triton computers now. That's why, in this setup, we don't use a datastore like \texttt{HDFS} but make use of \texttt{\$WRKDIR} as our datastore.
+		\item \textbf{NOTE}: Henceforth \texttt{\$WRKDIR/shotgun-spark/spark-2.0.1-bin-hadoop2.7} is referred to as \texttt{\$SPARK\_DIR}
+	\end{itemize}
+	\item run the \texttt{hostname} command to get the \textit{hostname} of the Triton Loging host. We will need it later and refer to it as \texttt{<hostname>}
+	\item We will run our master node in the Triton Loging host and we launch the master node by running the script \texttt{\$SPARK\_DIR/sbin/start-master.sh --host <hostname>  --port 7077 --webui-port 8080} 
+	\begin{description}
+		\item[NOTE:] It is possible that someone else is using the port 7077 for the master node and the (default) port 8080 for the \texttt{Spark} Web-UI, in which case the \texttt{start-master.sh} script might fail to start. Try different port number in that case.
+		\item[NOTE:] If the Master node started successfully, you should see a message like \\\texttt{starting org.apache.spark.deploy.master.Master, \\
+			logging to /scratch/work/username/spark-2.0.1-bin-hadoop2.7/logs/\\
+			spark-ghoshk1-org.apache.spark.deploy.master.Master-1-login2.int.triton.aalto.fi.out}
+	\end{description}
+	\item We would now want to setup an \textit{SSH-Tunnel} from our laptop or desktop to the Triton login host (Where the \texttt{Spark} Master node is running). This will allow us to monitor the Master node and observe when the slaves have connected to the master and are executing jobs etc.
+	From your laptop or desktop run the following command \texttt{ssh -L 8080:localhost:9000 <username>@triton.aalto.fi}
+	\begin{description}
+		\item[8080] This is Web-UI port used when setting up the \texttt{Spark} Master Node. If you used a different port, replace 8080 with the port you used while starting the Master node.
+		\item[<username>] This is thet \texttt{username} you use to log into Triton.
+		\item[NOTE:] If the \texttt{ssh} command fails to execute then you should try changing the port 9000 to something else. 
+	\end{description}
+	\item If the previous step was successful (if the command executed without any error), then you should now be able to view the \texttt{Spark}\textbf{Master WebUI} by navigating to the url \texttt{http://localhost:9000} in any web-browser on the laptop or desktop where you executed the ssh command,in the previous step. \textit{Remember}, if you used a port other than 9000 in the previous step then you should replace 9000 in this step with that same port number.
+	This process is also illustrated in Figure \ref{fig:tunnel}.
+	\begin{figure}[ht!]
+		\centering
+		\fbox{ \includegraphics[width=0.7\textwidth]{3.png} }
+		\caption{Illustration of the SSH-Tunnel setup.}
+		\label{fig:tunnel}
+	\end{figure}
+	
+	\item Now, load all the software packages (Triton modules) your job would need to be available for all the hosts. As explained earlier you can search modules available in Triton with $spider$ command. In our case we loaded the following:
+	\begin{itemize}
+		\item \texttt{module load Python/2.7.11-goolf-triton-2016b}
+		\item \texttt{module load numpy/1.11.1-goolf-triton-2016b-Python-2.7.11}
+		\item \texttt{module load scipy/0.18.0-goolf-triton-2016a-Python-2.7.11}
+	\end{itemize}
+	\item Now we will create a \texttt{SLURM} script (For more details see\footnote{https://wiki.aalto.fi/display/Triton/Running+programs+on+Triton}) which will request for some Triton hosts from \texttt{SLURM} and then launch the \texttt{Spark} slave processes on these hosts. 
+	\begin{description}
+		\item[NOTE:]These slaves would connect to the \texttt{Spark} Master node which we had set up earlier. 
+	\end{description}
+	These $Jobs$ are send to SLURM in a scrip. For that create a file (say slave-request.slrm) and copy the following lines into it:
+	\begin{listing}
+		\begin{minted}[baselinestretch=1, fontsize=\small, breaklines=true, mathescape, bgcolor=mygray]{shell}
+		#!/bin/bash
+		#SBATCH -t 00:10:00
+		#SBATCH -N 2
+		#SBATCH --ntasks-per-node=1
+		#SBATCH -p batch
+		
+		srun bash slave-invoke.sh
+		\end{minted}
+		\caption{\texttt{slave-request.slrm}}
+	\end{listing}
+	In previous script we specify the Triton queue to be $patch$ queue. However when you are debugging your scrip the $debug$ queue might be faster (but limited with resources and times to use). Next we create another script called \texttt{slave-invoke.sh}, which defines the $Job$ we are running in each slave. 
+	\begin{listing}
+		\begin{minted}[baselinestretch=1, fontsize=\small, breaklines=true, mathescape, bgcolor=mygray]{shell}
+		export SPARK_DIR=$WRKDIR/shotgun-spark/spark-2.0.1-bin-hadoop2.7
+		hostname
+		sh $SPARK_DIR/sbin/start-slave.sh spark://login2.int.triton.aalto.fi:7077
+		# the script will keep running for 10 minutes 
+		# (i.e. you will have the slave for 10m)
+		sleep 10m
+		# after that kill the slave
+		sh $SPARK_DIR/sbin/stop-slave.sh
+		\end{minted} 
+		\caption{\texttt{slave-invoke.sh}}
+	\end{listing}
+	\begin{description}
+		\item In First script \verb|#|\texttt{SBATCH -t 00:10:00} This tell \texttt{SLURM} that we want our job to run for 10 minutes. Remember that once \texttt{SLURM} allocates hosts to your job, the hosts remain allocated until the time (here 10 minutes) expire, or your script (job) terminates, whichever is first. So you will notice that we make our \texttt{slave-invoke.sh} script to \texttt{SLEEP} for 10 minutes (using the \texttt{sleep 10m} command).
+		\item In second script first line we define new variable to save some space later. Seconly we print the hostname and execute the slave starting comand where we give masters position as input argument.
+		\item Note we put the second script to sleep for a while (which we want to ensure that SLURM host is available) and after sleep it will kill the slaves (this will make it sure that even we would loose the connection to host of the slave the salve would be terminated after the sleep).
+	\end{description}
+	
+	Ensure that both the scripts \texttt{slave-request.slrm} and \texttt{slave-invoke.sh} are in the same directory. This is because in the last line of \texttt{slave-request.slrm} we execute \texttt{srun bash slave-invoke.sh} which expects the slave-invoke script to be present in the same directory as \texttt{slave-request.slrm}, if we invoke the script with the full path \texttt{srun bash /full/path/to/slave-invoke.sh} then \texttt{slave-request.sh} need not be in the same working directory.
+	\item Now we have to submit this $Job$ to \texttt{SLURM} from Loging host with command line command:
+	\begin{listing}
+		\begin{minted}[baselinestretch=1, fontsize=\small, breaklines=true, mathescape, bgcolor=mygray]{shell}
+		sbatch slave-request.slrm
+		\end{minted}
+		\caption{Command to submit a \textit{Job} to SLURM}
+	\end{listing}
+	
+	Note that, on submitting the job you will get a \textit{jobID} remeber this number. \\
+	You can now check the status of your request by running the \textbf{slurm q} command to see the complete \texttt{SLURM} job queue (including your job) or by running \texttt{slurm j <jobid>}. You can find more information about managing your jobs on triton here\footnote{https://wiki.aalto.fi/pages/viewpage.action?pageId=116668503}
+	\item We then test the setup by submiting an example job (here we run the \textit{Word Count} demo from the \texttt{Spark} examples folder) by executing the following command(s):\\
+	\begin{listing}
+		\begin{minted}[baselinestretch=1, fontsize=\small, breaklines=true, mathescape,bgcolor=mygray]{shell}
+		export SPARK_DIR=$WRKDIR/shotgun-spark/spark-2.0.1-bin-hadoop2.7      
+		sh $SPARK_DIR/bin/spark-submit \
+		--master spark://login2.int.triton.aalto.fi:7077 \
+		--executor-memory 5G \
+		$SPARK_DIR/examples/src/main/python/wordcount.py \
+		$SPARK_DIR/LICENSE
+		\end{minted}
+		\caption{Command to submit a job to \texttt{SPARK}! This submit the job to spark specify the master, the slave memory allocation, python script and the data location (Note: This is not submitted to \texttt{SLURM})}
+	\end{listing}
+	\begin{description}
+		\item[\texttt{export SPARK\_DIR=\$WRKDIR/shotgun-spark/spark-2.0.1-bin-hadoop2.7}] This is done to avoid writing long paths.
+		\item[\texttt{spark://login2.int.triton.aalto.fi:7077}] The master node is running on this \texttt{hostname} (Triton login host) and port 7077 (Use the same \texttt{hostname}:port you used while setting up the master node.)
+		\item[\texttt{executor-memory 5G}] Executor memory is set to \texttt{5 GB} here. As a rule of thumb, allocate execute memory approximately twice\footnote{http://stackoverflow.com/a/26578005} your RDD storage needs. Note in our example we only use tiny tex file the allocated memory is way too big, but serve as a example to any practical Spark implementation.
+	\end{description}
+	\item The example job should now execute when \texttt{SLURM} allocates hosts. The hosts would then be setup as slave nodes, connect to the master node and execute the jobs. You should be able to view the status of your master node (and the slaves / jobs) on your browser by navigating to the \texttt{Spark} \textbf{Master WebUI} as described in a previous step.
+\end{enumerate}
+
+
+\section{Running the \textit{Shotgun} algorithm on Triton}
+% \inputminted[baselinestretch=1, fontsize=\small, breaklines=true, mathescape, bgcolor=mygray]{python}{../../src/python/RDD_impl_1d.py}
+% \begin{listing}
+%     \caption{\texttt{RDD-impl-1d.py} \texttt{Spark} code implementing the \textit{Shotgun} algorithm using RDDs.}
+% \end{listing}
+The "Shotgun" Spark implementation can be found in Appendix \ref{shotgun-spark}. We have included necessary comments to the code, so that it would be easy to follow. Here we briefly go through the steps to run it in Triton. We show that the distributed implementation follows the results that the paper derives i.e. the the number of iterations drops linearly with the number of parallel calculation [Bradley]. The optimal value $P$ will tell the maximum parallel updates that theoretically follow the linear trend.
+
+\begin{enumerate}
+    \item As described in the previous section. Run the master node and request slaves for 30 minutes (You can modify this time based on your needs). You would need to change \verb|#|\texttt{SBATCH -t 00:10:00} to \texttt{00:30:00} in \texttt{slave-request.slrm} and change \texttt{sleep 10m} to \texttt{30m} in \texttt{slave-invoke.sh}
+    \item Run the \texttt{Spark} script \texttt{RDD-impl-1d.py} (See Appendix \ref{shotgun-spark}) from the \texttt{Triton} login host by running the following command. \textbf{NOTE:} You might need to change executor memory based on the dataset used.
+
+
+\begin{figure}[ht]
+  \centering
+    \includegraphics[width=0.7\linewidth]{P_vs_Iters.png}
+    \caption{\textit{Shotgun} Implementation in \texttt{Spark}. Number of iterations taken for the algorithm to converge (Y-axis) vs The number of parallel updates per iterations (X-axis). We see a same linear trend (in log scale) in the graph as observed by [Bradley]. The blue line corresponds to P = 158 the theoretical \texttt{P-}optimal in our case. The above plot is for the \texttt{Mug32SinglePixCam} dataset.}
+    \label{fig:1}
+\end{figure}
+
+\item \label{bigdata} We would like to point out that, in the script \texttt{RDD-impl-1d.py} the data matrix \texttt{A} is loaded from a matlab binary file (\texttt{Mug32\_singlepixcam.mat}) into the memory of one host as a NumPy object. It is then preprocessed before creating an RDD. This is possible only because we had a small dataset. For large datasets (which don't fit into memory on a single machine) you could consider the following steps:
+    \begin{itemize}
+        \item Convert the data to a standard text file (or a CSV file) using another script which reads the file line by line (or using Spark or Hadoop).
+        \item Load the data from the text file into a spark \texttt{RDD} (for example using the \texttt{sc.textFile(<path to text file>)} function call. Where \texttt{sc}is the sparkContext).
+        \item You might also need to modify \texttt{RDD-impl-1d.py} to take into account that the variable \texttt{A} is no longer a NumPy array but a Spark RDD.
+    \end{itemize}
+\end{enumerate}
+
+\subsection{Background for the algorithm}
+For reference we have also included a serial version of the Shotgun algorithm implemented in Python and the NumPy library (See Appendix \ref{shotgun-py}). Our fist implementation of the algorithm was in Matlab (see Appendix \ref{shotgun-mat}). We believe the pure Python (with NumPy) and Matlab implementations might be useful for someone trying to understand the algorithm.\par
+The matlab code uses the \texttt{parfor} command (parallel for loop) for the \textit{P} updates in each iteration. In \texttt{Spark} there is no special command to run the updates in parallel. Lines 124 to 129 in \texttt{RDD\_impl\_1d.py} (Appendix \ref{shotgun-spark}) first get the \textit{P} random indexes (we assume reader's familiarity with the algorithm) which would be updated and then perform the update, the parallelisation is implicit.\par
+The Python (with NumPy) code (Appendix \ref{shotgun-py}) doesn't have any parallelisation. This is not a problem, if one just wants to test the algorithm, since here the algorithm's performance is measured in iterations taken to converge to optimal. If the \texttt{P} updates in each iteration are in parallel then the total execution time is reduced.
+
+The time comparison of the algorithms were not included here since there were too many computer environmental issues to take care for this project. 
+
+\section{Conclusions and Next Steps}
+
+We had a great learning experience in implementing this optimization problem in 3 different programming languages. Although our \texttt{Spark} implementation is in pure python expressing the problem in-terms of \texttt{Spark RDDs} took us the longest to understand and implement, nevertheless it was educational. \par
+
+In our experience, we found the Triton computing infrastructure to have a bit of a learning curve, specially when trying to figure out an appropriate workflow for using \texttt{Spark} with Triton which is also (conceptually) easy to setup. However, after the initial learning curve the system was quite easy to use. We hope to see more courses make use of the Triton environment !\par
+
+A word of advice for someone starting to implement linear algebra operations with Spark. If you are familiar with Scala the Scala API to spark is a lot more flexible and you should use that. However, if you decide to use the Python API of \texttt{Spark} first try to express the algorithm interms of transformations of \texttt{RDDs}. We were given this advice (thanks Alex Mara !), but we decided first to experiment with \texttt{(Py)Spark} linear algebra library, which costed us a lot of time! \par
+We found the use of \texttt{Py(Spark)}'s linear algebra offerings quite limitting, since most often some operation (for example: transpose) can only be performed in one matrix type\footnote{\url{https://spark.apache.org/docs/2.0.0/mllib-data-types.html}} and there are multiple such matrix types to choose from.\par
+
+To conclude, a clear next step to continue this work would be to find a big dataset (where $L_1$ loss minimization makes sense) and test the spark implementation. \par
+\section{Referencies}
+
+[Bradley] Bradley, Kyrola, Bickson, Guestrin: Parallel Coordinate Decent for L1-Regularized Loss Minimisation, In the 28th International Conference on Machine Learning, July 2011, Washington, USA
+
+\pagebreak
+\appendix
+\section{Shotgun Algorithm - Spark Implementation}\label{shotgun-spark}
+\lstinputlisting[caption=\texttt{RDD-impl-1d.py} \texttt{Spark} code implementing the \textit{Shotgun} algorithm using RDDs.]{../../src/python/RDD_impl_1d.py}
+
+\section{Shotgun Algorithm - Python + NumPy Implementation}\label{shotgun-py}
+\lstinputlisting[caption=\texttt{Shotgun-NumPy.py} \texttt{Python} code implementing the \textit{Shotgun} algorithm using NumPy and SciPy]{../../src/python/naive_impl.py}
+
+\section{Shotgun Algorithm - Matlab Implementation}\label{shotgun-mat}
+\lstinputlisting[language=Matlab, caption=\texttt{Shotgun-Matlab.m} \texttt{Matlab} code implementing the \textit{Shotgun} algorithm.]{../../src/matlab/LassoShotgun.m}
+\lstinputlisting[language=Matlab, caption=\texttt{solveLasso.m} \texttt{Matlab} code for solving the LASSO. Copyright of the original authors (see comment in code).]{../../src/matlab/solveLasso.m}
+
+\end{document}
+
+
