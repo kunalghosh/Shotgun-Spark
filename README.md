@@ -1,7 +1,7 @@
 # "Shotgun" Spark
 Implementation of the Parallel Coordinate Descent for L1-Regularized Loss Minimization ( [arxiv](https://arxiv.org/abs/1105.5379),   [code](https://github.com/akyrola/shotgun) from authors of the paper ) in Spark.
 
-The [report](https://github.com/kunalghosh/Shotgun-Spark/blob/master/report/Report_final.pdf) goes into the details of how to run the Spark implementation on a SLURM (slurm.shedmd.org) based linux cluster.
+The [report](https://github.com/kunalghosh/Shotgun-Spark/blob/master/report/Report_v4.pdf) goes into the details of how to run the Spark implementation on a SLURM (slurm.shedmd.org) based linux cluster.
 
 # Dependencies:
 ## For the Python Implementation
